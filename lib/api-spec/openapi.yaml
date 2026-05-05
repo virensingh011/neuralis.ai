@@ -1,15 +1,24 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Neuralis AI — Multi-feature AI platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: openai
+    description: OpenAI AI chat, image, and audio operations
+  - name: weather
+    description: Weather prediction and forecast
+  - name: wikipedia
+    description: Wikipedia information summaries
+  - name: healthcare
+    description: Healthcare guidance and medical information
+  - name: study
+    description: Study tools — flashcards, quizzes, summaries
 paths:
   /healthz:
     get:
@@ -24,6 +33,580 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ──────────────── OpenAI Conversations ────────────────
+  /openai/conversations:
+    get:
+      operationId: listOpenaiConversations
+      tags: [openai]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiConversation"
+    post:
+      operationId: createOpenaiConversation
+      tags: [openai]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOpenaiConversationBody"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversation"
+
+  /openai/conversations/{id}:
+    get:
+      operationId: getOpenaiConversation
+      tags: [openai]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    patch:
+      operationId: updateOpenaiConversation
+      tags: [openai]
+      summary: Update conversation title
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOpenaiConversationBody"
+      responses:
+        "200":
+          description: Updated conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    delete:
+      operationId: deleteOpenaiConversation
+      tags: [openai]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+
+  /openai/conversations/{id}/messages:
+    get:
+      operationId: listOpenaiMessages
+      tags: [openai]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiMessage"
+    post:
+      operationId: sendOpenaiMessage
+      tags: [openai]
+      summary: Send a text message and receive a streaming text response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendOpenaiMessageBody"
+      responses:
+        "200":
+          description: SSE stream of assistant text chunks
+          content:
+            text/event-stream: {}
+
+  /openai/generate-image:
+    post:
+      operationId: generateOpenaiImage
+      tags: [openai]
+      summary: Generate an image from a text prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateOpenaiImageBody"
+      responses:
+        "200":
+          description: Generated image data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateOpenaiImageResponse"
+
+  /openai/stats:
+    get:
+      operationId: getOpenaiStats
+      tags: [openai]
+      summary: Get AI usage stats
+      responses:
+        "200":
+          description: Usage stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiStats"
+
+  # ──────────────── Weather ────────────────
+  /weather:
+    get:
+      operationId: getWeather
+      tags: [weather]
+      summary: Get current weather and forecast for a city
+      parameters:
+        - name: city
+          in: query
+          required: true
+          schema:
+            type: string
+          description: City name to get weather for
+        - name: units
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [metric, imperial]
+          description: Temperature units (metric=Celsius, imperial=Fahrenheit)
+      responses:
+        "200":
+          description: Weather data with forecast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherResponse"
+        "404":
+          description: City not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+
+  # ──────────────── Wikipedia ────────────────
+  /wikipedia/search:
+    get:
+      operationId: searchWikipedia
+      tags: [wikipedia]
+      summary: Search Wikipedia for articles
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WikipediaSearchResult"
+
+  /wikipedia/summary:
+    get:
+      operationId: getWikipediaSummary
+      tags: [wikipedia]
+      summary: Get Wikipedia article summary with AI enhancement
+      parameters:
+        - name: title
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Wikipedia article title
+      responses:
+        "200":
+          description: Article summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WikipediaSummary"
+        "404":
+          description: Article not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+
+  # ──────────────── Healthcare ────────────────
+  /healthcare/conversations:
+    get:
+      operationId: listHealthcareConversations
+      tags: [healthcare]
+      summary: List all healthcare consultation sessions
+      responses:
+        "200":
+          description: List of healthcare conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HealthcareConversation"
+    post:
+      operationId: createHealthcareConversation
+      tags: [healthcare]
+      summary: Start a new healthcare consultation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHealthcareConversationBody"
+      responses:
+        "201":
+          description: Created consultation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthcareConversation"
+
+  /healthcare/conversations/{id}:
+    get:
+      operationId: getHealthcareConversation
+      tags: [healthcare]
+      summary: Get healthcare conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthcareConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    delete:
+      operationId: deleteHealthcareConversation
+      tags: [healthcare]
+      summary: Delete a healthcare consultation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /healthcare/conversations/{id}/messages:
+    post:
+      operationId: sendHealthcareMessage
+      tags: [healthcare]
+      summary: Send a message to the healthcare AI consultant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendHealthcareMessageBody"
+      responses:
+        "200":
+          description: SSE stream of healthcare guidance
+          content:
+            text/event-stream: {}
+
+  /healthcare/analyze-symptoms:
+    post:
+      operationId: analyzeSymptoms
+      tags: [healthcare]
+      summary: Analyze symptoms and suggest possible conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeSymptomsBody"
+      responses:
+        "200":
+          description: Symptom analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeSymptomsResponse"
+
+  # ──────────────── Study Tools ────────────────
+  /study/sessions:
+    get:
+      operationId: listStudySessions
+      tags: [study]
+      summary: List all study sessions
+      responses:
+        "200":
+          description: List of study sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudySession"
+    post:
+      operationId: createStudySession
+      tags: [study]
+      summary: Create a new study session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStudySessionBody"
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudySession"
+
+  /study/sessions/{id}:
+    get:
+      operationId: getStudySession
+      tags: [study]
+      summary: Get a study session with all content
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Study session with content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudySessionWithContent"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    delete:
+      operationId: deleteStudySession
+      tags: [study]
+      summary: Delete a study session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /study/sessions/{id}/flashcards:
+    get:
+      operationId: listFlashcards
+      tags: [study]
+      summary: List flashcards for a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Flashcards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Flashcard"
+    post:
+      operationId: generateFlashcards
+      tags: [study]
+      summary: Generate AI flashcards from text
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateFlashcardsBody"
+      responses:
+        "201":
+          description: Generated flashcards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Flashcard"
+
+  /study/sessions/{id}/quiz:
+    post:
+      operationId: generateQuiz
+      tags: [study]
+      summary: Generate a quiz from study material
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateQuizBody"
+      responses:
+        "201":
+          description: Generated quiz questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuizQuestion"
+
+  /study/summarize:
+    post:
+      operationId: summarizeText
+      tags: [study]
+      summary: Summarize and explain a text or topic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SummarizeTextBody"
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummarizeTextResponse"
+
+  /study/explain:
+    post:
+      operationId: explainConcept
+      tags: [study]
+      summary: Get a detailed AI explanation of a concept
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExplainConceptBody"
+      responses:
+        "200":
+          description: SSE stream of explanation
+          content:
+            text/event-stream: {}
+
+  /study/stats:
+    get:
+      operationId: getStudyStats
+      tags: [study]
+      summary: Get study statistics overview
+      responses:
+        "200":
+          description: Study stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +617,628 @@ components:
       required:
         - status
 
+    # ── OpenAI Schemas ──
+    OpenaiConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        mode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - mode
+        - createdAt
+        - updatedAt
+
+    OpenaiConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        mode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenaiMessage"
+      required:
+        - id
+        - title
+        - mode
+        - createdAt
+        - updatedAt
+        - messages
+
+    OpenaiMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    CreateOpenaiConversationBody:
+      type: object
+      properties:
+        title:
+          type: string
+        mode:
+          type: string
+      required:
+        - title
+
+    UpdateOpenaiConversationBody:
+      type: object
+      properties:
+        title:
+          type: string
+      required:
+        - title
+
+    SendOpenaiMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+    SendOpenaiVoiceMessageBody:
+      type: object
+      properties:
+        audio:
+          type: string
+          description: Base64-encoded audio data
+      required:
+        - audio
+
+    GenerateOpenaiImageBody:
+      type: object
+      properties:
+        prompt:
+          type: string
+        size:
+          type: string
+          enum: ["1024x1024", "1536x1024", "1024x1536"]
+        style:
+          type: string
+      required:
+        - prompt
+
+    GenerateOpenaiImageResponse:
+      type: object
+      properties:
+        b64_json:
+          type: string
+        prompt:
+          type: string
+      required:
+        - b64_json
+        - prompt
+
+    OpenaiStats:
+      type: object
+      properties:
+        totalConversations:
+          type: integer
+        totalMessages:
+          type: integer
+        imagesGenerated:
+          type: integer
+        studySessions:
+          type: integer
+        healthConsultations:
+          type: integer
+      required:
+        - totalConversations
+        - totalMessages
+        - imagesGenerated
+        - studySessions
+        - healthConsultations
+
+    OpenaiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # ── Weather Schemas ──
+    WeatherResponse:
+      type: object
+      properties:
+        city:
+          type: string
+        country:
+          type: string
+        current:
+          $ref: "#/components/schemas/WeatherCurrent"
+        forecast:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherForecastDay"
+        aiInsight:
+          type: string
+      required:
+        - city
+        - country
+        - current
+        - forecast
+        - aiInsight
+
+    WeatherCurrent:
+      type: object
+      properties:
+        temp:
+          type: number
+        feelsLike:
+          type: number
+        humidity:
+          type: integer
+        windSpeed:
+          type: number
+        condition:
+          type: string
+        description:
+          type: string
+        icon:
+          type: string
+        visibility:
+          type: number
+        pressure:
+          type: integer
+        uvIndex:
+          type: number
+      required:
+        - temp
+        - feelsLike
+        - humidity
+        - windSpeed
+        - condition
+        - description
+        - icon
+        - visibility
+        - pressure
+        - uvIndex
+
+    WeatherForecastDay:
+      type: object
+      properties:
+        date:
+          type: string
+        dayName:
+          type: string
+        tempMin:
+          type: number
+        tempMax:
+          type: number
+        condition:
+          type: string
+        icon:
+          type: string
+        precipitationChance:
+          type: integer
+      required:
+        - date
+        - dayName
+        - tempMin
+        - tempMax
+        - condition
+        - icon
+        - precipitationChance
+
+    # ── Wikipedia Schemas ──
+    WikipediaSearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        excerpt:
+          type: string
+        url:
+          type: string
+        thumbnail:
+          type: ["string", "null"]
+      required:
+        - title
+        - excerpt
+        - url
+
+    WikipediaSummary:
+      type: object
+      properties:
+        title:
+          type: string
+        extract:
+          type: string
+        aiSummary:
+          type: string
+        url:
+          type: string
+        thumbnail:
+          type: ["string", "null"]
+        relatedTopics:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - extract
+        - aiSummary
+        - url
+        - relatedTopics
+
+    # ── Healthcare Schemas ──
+    HealthcareConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        specialty:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - specialty
+        - createdAt
+        - updatedAt
+
+    HealthcareConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        specialty:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenaiMessage"
+      required:
+        - id
+        - title
+        - specialty
+        - createdAt
+        - updatedAt
+        - messages
+
+    CreateHealthcareConversationBody:
+      type: object
+      properties:
+        title:
+          type: string
+        specialty:
+          type: string
+      required:
+        - title
+
+    SendHealthcareMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+    AnalyzeSymptomsBody:
+      type: object
+      properties:
+        symptoms:
+          type: array
+          items:
+            type: string
+        age:
+          type: ["integer", "null"]
+        gender:
+          type: ["string", "null"]
+        duration:
+          type: ["string", "null"]
+      required:
+        - symptoms
+
+    AnalyzeSymptomsResponse:
+      type: object
+      properties:
+        disclaimer:
+          type: string
+        possibleConditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymptomCondition"
+        recommendations:
+          type: array
+          items:
+            type: string
+        urgencyLevel:
+          type: string
+      required:
+        - disclaimer
+        - possibleConditions
+        - recommendations
+        - urgencyLevel
+
+    SymptomCondition:
+      type: object
+      properties:
+        name:
+          type: string
+        likelihood:
+          type: string
+        description:
+          type: string
+      required:
+        - name
+        - likelihood
+        - description
+
+    # ── Study Schemas ──
+    StudySession:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        subject:
+          type: string
+        flashcardCount:
+          type: integer
+        quizCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - subject
+        - flashcardCount
+        - quizCount
+        - createdAt
+        - updatedAt
+
+    StudySessionWithContent:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        subject:
+          type: string
+        flashcardCount:
+          type: integer
+        quizCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        flashcards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flashcard"
+        quizQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuizQuestion"
+      required:
+        - id
+        - title
+        - subject
+        - flashcardCount
+        - quizCount
+        - createdAt
+        - updatedAt
+        - flashcards
+        - quizQuestions
+
+    CreateStudySessionBody:
+      type: object
+      properties:
+        title:
+          type: string
+        subject:
+          type: string
+      required:
+        - title
+        - subject
+
+    Flashcard:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        front:
+          type: string
+        back:
+          type: string
+        difficulty:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - front
+        - back
+        - difficulty
+        - createdAt
+
+    QuizQuestion:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        question:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        correctIndex:
+          type: integer
+        explanation:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - question
+        - options
+        - correctIndex
+        - explanation
+        - createdAt
+
+    GenerateFlashcardsBody:
+      type: object
+      properties:
+        text:
+          type: string
+        count:
+          type: integer
+      required:
+        - text
+
+    GenerateQuizBody:
+      type: object
+      properties:
+        text:
+          type: string
+        count:
+          type: integer
+        difficulty:
+          type: string
+      required:
+        - text
+
+    SummarizeTextBody:
+      type: object
+      properties:
+        text:
+          type: string
+        style:
+          type: string
+          enum: [brief, detailed, bullet, academic]
+      required:
+        - text
+
+    SummarizeTextResponse:
+      type: object
+      properties:
+        summary:
+          type: string
+        keyPoints:
+          type: array
+          items:
+            type: string
+        wordCount:
+          type: integer
+      required:
+        - summary
+        - keyPoints
+        - wordCount
+
+    ExplainConceptBody:
+      type: object
+      properties:
+        concept:
+          type: string
+        level:
+          type: string
+          enum: [beginner, intermediate, advanced, expert]
+        subject:
+          type: ["string", "null"]
+      required:
+        - concept
+        - level
+
+    StudyStats:
+      type: object
+      properties:
+        totalSessions:
+          type: integer
+        totalFlashcards:
+          type: integer
+        totalQuizzes:
+          type: integer
+        subjectBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubjectStat"
+      required:
+        - totalSessions
+        - totalFlashcards
+        - totalQuizzes
+        - subjectBreakdown
+
+    SubjectStat:
+      type: object
+      properties:
+        subject:
+          type: string
+        sessionCount:
+          type: integer
+      required:
+        - subject
+        - sessionCount
