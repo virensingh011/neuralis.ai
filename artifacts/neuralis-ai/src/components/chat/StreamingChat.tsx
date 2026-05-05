@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, Sparkles, Code2, Beaker } from "lucide-react";
+import { Send, Bot, User, Loader2, Sparkles, Code2, Beaker, Mic, MicOff, Square } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -16,14 +15,41 @@ interface StreamingChatProps {
   conversationId: number;
   initialMessages: OpenaiMessage[];
   endpoint: string;
+  showModeSelector?: boolean;
 }
 
-export function StreamingChat({ conversationId, initialMessages, endpoint }: StreamingChatProps) {
+type SpeechRecognitionEvent = {
+  results: { [key: number]: { [key: number]: { transcript: string } } };
+  resultIndex: number;
+};
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
+  }
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (e: SpeechRecognitionEvent) => void;
+  onerror: () => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+}
+
+export function StreamingChat({ conversationId, initialMessages, endpoint, showModeSelector = true }: StreamingChatProps) {
   const [messages, setMessages] = useState<OpenaiMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [mode, setMode] = useState("general");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
     setMessages(initialMessages);
@@ -35,13 +61,63 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
     }
   }, [messages, isStreaming]);
 
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setVoiceSupported(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < Object.keys(event.results).length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInput(prev => {
+          const base = prev.replace(/\[voice\].*$/s, "").trimEnd();
+          return base ? `${base} ${transcript}` : transcript;
+        });
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
+
+  const toggleVoice = useCallback(() => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  }, [isListening]);
+
   const handleSubmit = async () => {
     if (!input.trim() || isStreaming) return;
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    }
 
     const userMessage = input.trim();
     setInput("");
-    
-    // Add optimistic user message
+
     const tempUserMsg: OpenaiMessage = {
       id: Date.now(),
       conversationId,
@@ -49,7 +125,7 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
       content: userMessage,
       createdAt: new Date().toISOString()
     };
-    
+
     setMessages(prev => [...prev, tempUserMsg]);
     setIsStreaming(true);
 
@@ -61,13 +137,12 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
       });
 
       if (!response.ok) throw new Error("Stream failed");
-      
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      
+
       if (!reader) return;
 
-      // Add temporary assistant message
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         conversationId,
@@ -89,7 +164,6 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
           if (line.startsWith("data: ")) {
             const dataStr = line.substring(6);
             if (!dataStr) continue;
-            
             try {
               const data = JSON.parse(dataStr);
               if (data.done) {
@@ -108,13 +182,12 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
                 });
               }
             } catch (e) {
-              console.error("Failed to parse SSE", e);
+              // ignore parse errors
             }
           }
         }
       }
     } catch (error) {
-      console.error(error);
       setIsStreaming(false);
     }
   };
@@ -127,22 +200,24 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
           <Bot className="h-5 w-5 text-primary" />
           <h2 className="font-semibold text-foreground tracking-tight">Neuralis Intelligence</h2>
         </div>
-        <Select value={mode} onValueChange={setMode}>
-          <SelectTrigger className="w-[140px] h-8 bg-transparent border-border/50">
-            <SelectValue placeholder="Mode" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="general">
-              <div className="flex items-center gap-2"><Sparkles className="h-3 w-3" /> General</div>
-            </SelectItem>
-            <SelectItem value="code">
-              <div className="flex items-center gap-2"><Code2 className="h-3 w-3" /> Coding</div>
-            </SelectItem>
-            <SelectItem value="research">
-              <div className="flex items-center gap-2"><Beaker className="h-3 w-3" /> Research</div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        {showModeSelector && (
+          <Select value={mode} onValueChange={setMode}>
+            <SelectTrigger className="w-[140px] h-8 bg-transparent border-border/50">
+              <SelectValue placeholder="Mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="general">
+                <div className="flex items-center gap-2"><Sparkles className="h-3 w-3" /> General</div>
+              </SelectItem>
+              <SelectItem value="code">
+                <div className="flex items-center gap-2"><Code2 className="h-3 w-3" /> Coding</div>
+              </SelectItem>
+              <SelectItem value="research">
+                <div className="flex items-center gap-2"><Beaker className="h-3 w-3" /> Research</div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Messages */}
@@ -185,9 +260,12 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
               </motion.div>
             ))}
           </AnimatePresence>
+
           {isStreaming && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4">
-              <Avatar className="h-8 w-8 mt-1 shrink-0"><AvatarFallback className="bg-secondary"><Loader2 className="h-4 w-4 animate-spin" /></AvatarFallback></Avatar>
+              <Avatar className="h-8 w-8 mt-1 shrink-0">
+                <AvatarFallback className="bg-secondary"><Loader2 className="h-4 w-4 animate-spin" /></AvatarFallback>
+              </Avatar>
               <div className="px-4 py-3 rounded-2xl bg-card border border-border/50 rounded-tl-sm flex items-center h-11">
                 <span className="flex space-x-1">
                   <motion.span animate={{ opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0 }} className="h-2 w-2 bg-primary rounded-full" />
@@ -202,21 +280,70 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
 
       {/* Input Area */}
       <div className="p-4 bg-card/50 border-t border-border/50 backdrop-blur-sm">
+        {/* Voice indicator */}
+        <AnimatePresence>
+          {isListening && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium"
+            >
+              <motion.span
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ repeat: Infinity, duration: 1 }}
+                className="h-2 w-2 rounded-full bg-red-500 inline-block"
+              />
+              Listening... speak now. Click the mic to stop.
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="max-w-4xl mx-auto relative flex items-end gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSubmit();
               }
             }}
-            placeholder="Query Neuralis..."
-            className="min-h-[52px] w-full resize-none rounded-xl border-border/50 bg-background py-3 px-4 pr-12 focus-visible:ring-1 focus-visible:ring-primary shadow-inner"
+            placeholder={isListening ? "Listening to your voice..." : "Query Neuralis... (or use the mic)"}
+            className={cn(
+              "min-h-[52px] w-full resize-none rounded-xl border-border/50 bg-background py-3 px-4 pr-24 focus-visible:ring-1 focus-visible:ring-primary shadow-inner transition-colors",
+              isListening && "border-red-500/50 focus-visible:ring-red-500/50"
+            )}
             rows={1}
             data-testid="input-chat"
           />
+
+          {/* Voice button */}
+          {voiceSupported && (
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={toggleVoice}
+              className={cn(
+                "absolute bottom-1.5 right-12 h-10 w-10 rounded-lg transition-all",
+                isListening
+                  ? "bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30"
+                  : "border-border/50 text-muted-foreground hover:text-primary hover:border-primary/50"
+              )}
+              title={isListening ? "Stop listening" : "Start voice input"}
+              data-testid="button-voice-input"
+            >
+              {isListening ? (
+                <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
+                  <Square className="h-4 w-4 fill-current" />
+                </motion.div>
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          {/* Send button */}
           <Button
             size="icon"
             className="absolute bottom-1.5 right-1.5 h-10 w-10 rounded-lg shadow-md transition-transform active:scale-95"
@@ -228,7 +355,7 @@ export function StreamingChat({ conversationId, initialMessages, endpoint }: Str
           </Button>
         </div>
         <div className="text-center mt-2 text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
-          Neuralis Core v2.4 • Secured Connection
+          Neuralis Core v2.4 • Secured Connection {voiceSupported && "• Voice Enabled"}
         </div>
       </div>
     </div>

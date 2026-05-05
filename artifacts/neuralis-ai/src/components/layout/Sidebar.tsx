@@ -7,13 +7,15 @@ import {
   CloudSun, 
   BookOpen, 
   Activity, 
-  GraduationCap 
+  GraduationCap,
+  Code2
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chat", label: "AI Chat", icon: MessageSquare },
+  { href: "/code", label: "Code Generator", icon: Code2 },
   { href: "/image", label: "Image Gen", icon: ImageIcon },
   { href: "/weather", label: "Weather", icon: CloudSun },
   { href: "/wiki", label: "Wiki Hub", icon: BookOpen },

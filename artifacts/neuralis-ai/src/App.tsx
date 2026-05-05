@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout/Layout";
 import Dashboard from "@/pages/Dashboard";
 import Chat from "@/pages/Chat";
+import Code from "@/pages/Code";
 import ImageGen from "@/pages/ImageGen";
 import Weather from "@/pages/Weather";
 import Wiki from "@/pages/Wiki";
@@ -20,6 +21,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/chat" component={Chat} />
+        <Route path="/code" component={Code} />
         <Route path="/image" component={ImageGen} />
         <Route path="/weather" component={Weather} />
         <Route path="/wiki" component={Wiki} />
